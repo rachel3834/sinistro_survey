@@ -11,10 +11,22 @@ Created on Wed Feb 17 00:00:05 2016
 
 import logging
 from os import path
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 import glob
 
-def start_day_log( config, log_name ):
+def get_log_path( log_dir, log_root_name, day_offset=None ):
+    """Function to return the full path to a timestamped day log"""
+
+    ts = Time.now()
+    if day_offset != None:
+        dt = TimeDelta( (float(day_offset)*24.0*60.0*60.0), format='sec' )
+        ts = ts + dt
+    ts = ts.iso.split()[0]
+        
+    log_file = path.join( log_dir, log_root_name + '_' + ts + '_sba.log' )
+    return log_file
+
+def start_day_log( config, log_name, console_output=False ):
     """Function to initialize a new log file.  The naming convention for the
     file is [log_name]_[UTC_date].log.  A new file is automatically created 
     if none for the current UTC day already exist, otherwise output is appended
@@ -23,11 +35,7 @@ def start_day_log( config, log_name ):
     all entries.  
     """
 
-    ts = Time.now()    
-    ts = ts.iso.split()[0]
-    
-    log_file = path.join( config['logdir'], \
-                    config['log_root_name'] + '_' + ts + '.log' )
+    log_file = get_log_path( config['logdir'], config['log_root_name'] )
 
     # Look for previous logs and rollover the date if the latest log
     # isn't from the curent date:
@@ -42,17 +50,20 @@ def start_day_log( config, log_name ):
         log.setLevel( logging.INFO )
         file_handler = logging.FileHandler( log_file )
         file_handler.setLevel( logging.INFO )
-    
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel( logging.INFO )
+        
+        if console_output == True:
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel( logging.INFO )
     
         formatter = logging.Formatter( fmt='%(asctime)s %(message)s', \
                                     datefmt='%Y-%m-%dT%H:%M:%S' )
         file_handler.setFormatter( formatter )
-        console_handler.setFormatter( formatter )
+        if console_output == True:
+            console_handler.setFormatter( formatter )
     
         log.addHandler( file_handler )
-        log.addHandler( console_handler )
+        if console_output == True:
+            log.addHandler( console_handler )
     
     log.info( '\n------------------------------------------------------\n')
     return log
@@ -67,11 +78,8 @@ def end_day_log( log ):
 def start_obs_record( config ):
     """Function to initialize or open a daily record of submitted observations"""
     
-    ts = Time.now()    
-    ts = ts.iso.split()[0]
+    log_file = get_log_path( config['logdir'], 'ObsRecord_1m_' )
     
-    log_file = path.join( config['logdir'], \
-                    'ObsRecord_1m_' + ts + '_sba.log' )
     if path.isfile(log_file) == True:
         obsrecord = open(log_file,'a')
     else:

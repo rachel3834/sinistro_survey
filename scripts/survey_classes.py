@@ -32,6 +32,8 @@ class SurveyField:
         self.ts_submit = None
         self.ts_expire = None
         self.ttl = 1.0
+        self.submit_response = None
+        self.submit_status = None
         
     def summary(self):
         exp_list = ''

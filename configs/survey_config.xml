@@ -2,7 +2,7 @@
 
 <surveyconfig>
     <parameter name='logdir'>
-      	<value>/home/rstreet/RoboNet/2016/Logs</value>
+      	<value>/science/robonet/rob/Operations/Logs/2016</value>
     </parameter>
     <parameter name='log_root_name'>
       	<value>sinistro_survey_obs</value>
