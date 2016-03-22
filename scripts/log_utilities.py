@@ -13,6 +13,8 @@ import logging
 from os import path
 from astropy.time import Time, TimeDelta
 import glob
+from datetime import datetime
+import survey_classes
 
 def get_log_path( log_dir, log_root_name, day_offset=None ):
     """Function to return the full path to a timestamped day log"""
@@ -80,14 +82,70 @@ def start_obs_record( config ):
     
     log_file = get_log_path( config['logdir'], 'ObsRecord_1m_' )
     
+    tnow = datetime.utcnow()
+    
     if path.isfile(log_file) == True:
         obsrecord = open(log_file,'a')
     else:
         obsrecord = open(log_file,'w')
         obsrecord.write('# Log of Requested Observation Groups\n')
         obsrecord.write('#\n')
-        obsrecord.write('# Log started: 2015-11-04 T 00:00:10\n')
+        obsrecord.write('# Log started: ' + tnow.strftime("%Y-%m-%dT%H:%M:%S") + '\n')
         obsrecord.write('# Running at sba\n')
         obsrecord.write('#\n')
         obsrecord.write('# GrpID  TrackID  ReqID  Network  Site  Obs  Tel  Instrum  Target  RA(J2000)  Dec(J2000)  Filter  ExpTime  ExpCount  ExpTaken  GrpType  Cadence  Priority  TS_Submit  TS_Expire  TAGID  UserID  PropID  TTL  Twilight  Darkness  Seeing  FocusOffset  RotatorAngle  Autoguider  SubmitMech  ConfigType  ReqOrigin  RCS_Report\n')
     return obsrecord
+
+def read_active_survey_obs( config, log ):
+    """Function to read the ActiveSurveyObs.log file"""
+    
+    log_file = path.join( config['logdir'], 'ActiveSurveyObs.log' )
+    
+    existing_obs = {}    
+    
+    tnow = datetime.utcnow()
+    
+    # Case 1: no log file.  Assume no recent observations have been requested
+    if path.isfile( log_file ) == False:
+        log.info('-> No records of recent observations have been found')
+        return existing_obs
+    
+    # Case 2: A log file exists, indicating previous observation groups may
+    # still be live.  Note we first filter for those prefixed 'RBNS'
+    else:
+        file_lines = open(log_file, 'r').readlines()
+        log.info('Reading log file ' + path.basename( log_file ))
+        for line in file_lines:
+            if line.lstrip()[0:1] != '#' and len(line) > 0:
+                entries = line.split()
+                if 'RBNS' in entries[0]:
+                    field = survey_classes.SurveyField(config)
+                    field.set_pars_from_log( line )
+                    if field.submit_status == 'add_OK' and \
+                        field.ts_expire > tnow:
+                        existing_obs[field.name] = field
+                        log.info(' -> Found ongoing live obs request for field ' + \
+                                field.name + ': ' + field.req_id + \
+                                '. Expires: ' + \
+                                field.ts_submit.strftime("%Y-%m-%dT%H:%M:%S"))
+        if len(existing_obs) == 0:
+            log.info(' -> No ongoing observations found')
+            
+    return existing_obs
+
+def write_active_survey_obs( existing_obs, config, log ):
+    """Function to write the ActiveSurveyObs log"""
+    
+    log_file = path.join( config['logdir'], 'ActiveSurveyObs.log' )
+    tnow = datetime.utcnow()
+    active_log = open( log_file, 'w' )
+    active_log.write('# Log of Requested Observation Groups\n')
+    active_log.write('#\n')
+    active_log.write('# Log started: ' + tnow.strftime("%Y-%m-%dT%H:%M:%S") + '\n')
+    active_log.write('# Running at sba\n')
+    active_log.write('# GrpID  TrackID  ReqID  Network  Site  Obs  Tel  Instrum  Target  RA(J2000)  Dec(J2000)  Filter  ExpTime  ExpCount  ExpTaken  GrpType  Cadence  Priority  TS_Submit  TS_Expire  TAGID  UserID  PropID  TTL  Twilight  Darkness  Seeing  FocusOffset  RotatorAngle  Autoguider  SubmitMech  ConfigType  ReqOrigin  RCS_Report\n')
+    for field_id, field in existing_obs.items():
+        obsrecord = field.obs_record( config )
+        active_log.write( obsrecord )
+    active_log.close()
+    log.info('Completed output of observations to active log')

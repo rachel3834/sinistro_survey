@@ -15,23 +15,43 @@ from sys import exit
 
 class SurveyField:
     
-    def __init__(self):
+    def __init__(self, config):
         self.name = None
+        self.track_id = None
+        self.req_id = None
+        self.network = 'LCOGT'
         self.ra = None
         self.dec = None
         self.site = None
         self.observatory = None
+        self.tel = None
         self.instrument = None
+        self.instrument_class = None
         self.filter = None
+        self.exposures_taken = 0
+        self.group_type = 'Monitor'
         self.exposure_times = []
         self.exposure_counts = []
         self.cadence = None
+        self.priority = 'Medium'
         self.json_request = None
-        self.request_id = None
+        self.group_id = None
         self.request_number = None
         self.ts_submit = None
         self.ts_expire = None
+        self.tag_id = 'LCOGT'
+        self.user_id = config['user_id']
+        self.proposal_id = config['proposal_id']
         self.ttl = 1.0
+        self.twilight = 'Yes'
+        self.darkness = 'Bright'
+        self.seeing = 'Good'
+        self.focus_offset = '0'
+        self.rotator_angle = '0'
+        self.autoguider = 'maybe'
+        self.submit_mech = 'ODIN'
+        self.config_type = 'network'
+        self.req_origin = 'survey'
         self.submit_response = None
         self.submit_status = None
         
@@ -46,7 +66,7 @@ class SurveyField:
                 exp_list + ' ' + str(self.cadence)
         return output
 
-    def get_request_id(self):
+    def get_group_id(self):
         dateobj = datetime.utcnow()
         time = float(dateobj.hour) + (float(dateobj.minute)/60.0) + \
         (float(dateobj.second)/3600.0) + (float(dateobj.microsecond)/3600e6)
@@ -54,9 +74,47 @@ class SurveyField:
         ctime = str(time)
         date = dateobj.strftime('%Y%m%d')
         TS = date+'T'+ctime
-        self.request_id = 'RBNS'+TS
+        self.group_id = 'RBNS'+TS
     
-        
+    def set_pars_from_log(self, log_entry):
+        entries = log_entry.replace('\n','').split()
+        self.group_id = entries[0]
+        self.track_id = entries[1]
+        self.req_id = entries[2]
+        self.network = entries[3]
+        self.site = entries[4]
+        self.observatory= entries[5]
+        self.tel = entries[6]
+        self.instrument = entries[7]
+        self.instrument_class = entries[7]
+        self.name = entries[8]
+        self.ra = entries[9]
+        self.dec = entries[10]
+        self.filter = entries[11]
+        self.exposure_times.append(float(entries[12]))
+        self.exposure_counts.append(int(entries[13]))
+        self.exposures_taken = int(entries[14])
+        self.group_type = entries[15]
+        self.cadence = entries[16]
+        self.priority = entries[17]
+        self.ts_submit = datetime.strptime( entries[18], \
+                                        "%Y-%m-%dT%H:%M:%S" )
+        self.ts_expire = datetime.strptime( entries[19], \
+                                        "%Y-%m-%dT%H:%M:%S" )
+        self.tag_id = entries[20]
+        self.user_id = entries[21]
+        self.proposal_id = entries[22]
+        self.ttl = entries[23]
+        self.twilight = entries[24]
+        self.darkness = entries[25]
+        self.seeing = entries[26]
+        self.focus_offset = entries[27]
+        self.rotator_angle = entries[28]
+        self.autoguider = entries[29]
+        self.submit_mech = entries[30]
+        self.config_type = entries[31]
+        self.req_origin = entries[32]
+        self.submit_status = entries[33]
     
     def build_odin_request(self, config, log=None, debug=False):
         
@@ -100,8 +158,8 @@ class SurveyField:
         if debug == True and log != None:
             log.info('Instrument overheads ' + imager.summary() )
             
-        self.get_request_id()   
-        ur = { 'group_id': self.request_id, 'operator': 'many' }
+        self.get_group_id()   
+        ur = { 'group_id': self.group_id, 'operator': 'many' }
         reqList = []
         
         self.ts_submit = datetime.utcnow() + timedelta(seconds=(10*60))
@@ -213,7 +271,7 @@ class SurveyField:
                 except ValueError:
                     try:
                         (key,value) = entry.split('=')
-                        self.request_number = str(value)
+                        self.req_id = str(value)
                         self.submit_response = str(key) + ' = ' + str(value)
                         self.submit_status = 'add_OK'
                     except:
@@ -227,24 +285,31 @@ class SurveyField:
     def obs_record( self, config ):
         """Method to output a record, in standard format, of the current 
         observation request"""
-
-        if 'OK' in self.submit_status:
-            report = self.submit_status
+        
+        if 'OK' in str(self.submit_status):
+            report = str(self.submit_status)
         else:
-            report = self.submit_status + ': ' + self.submit_response
+            report = str(self.submit_status) + ': ' + str(self.submit_response)
         
         output = ''
         for i, exptime in enumerate(self.exposure_times):
             output = output + \
-                self.request_id + ' ' + str(self.request_number) + \
-                ' None LCOGT ' + str(self.site) + ' ' + \
-                str(self.tel).replace('a','') + ' ' + str(self.instrument_class) + \
-                ' ' + str(self.name) + ' ' + str(self.ra) + ' ' + str(self.dec) + \
+                str(self.group_id) + ' ' + str(self.track_id) + ' ' + \
+                str(self.req_id) + ' ' + str(self.network) + ' ' + \
+                str(self.site) + ' ' + str(self.observatory) + ' ' + \
+                str(self.tel).replace('a','') + ' ' + \
+                str(self.instrument_class) + ' ' + str(self.name) + ' ' + \
+                str(self.ra) + ' ' + str(self.dec) + \
                 ' ' + str(self.filter) + ' ' + str(exptime) + ' ' + \
-                str(self.exposure_counts[i]) + ' 0 Monitor ' + str(self.cadence) + \
-                ' medium ' + self.ts_submit.strftime("%Y-%m-%dT%H:%M:%S") + ' ' + \
-                self.ts_expire.strftime("%Y-%m-%dT%H:%M:%S") + ' LCOGT ' + \
-                str(config['user_id']) + ' ' + str(config['proposal_id']) + ' ' + \
-                str(self.ttl) + ' None None None 0.0 0.0 2 ODIN network survey ' + \
-                report + '\n'
+                str(self.exposure_counts[i]) + ' ' + str(self.exposures_taken) + \
+                ' ' + str(self.group_type) + ' ' + str(self.cadence) + ' ' + \
+                str(self.priority) + ' ' + self.ts_submit.strftime("%Y-%m-%dT%H:%M:%S") + ' ' + \
+                self.ts_expire.strftime("%Y-%m-%dT%H:%M:%S") + ' ' + \
+                str(self.tag_id) + ' ' + str(config['user_id']) + ' ' + str(config['proposal_id']) + ' ' + \
+                str(self.ttl) + ' ' + str(self.twilight) + ' ' + \
+                str(self.darkness) + ' ' + str(self.seeing) + ' ' + \
+                str(self.focus_offset) + ' ' + str(self.rotator_angle) + ' ' +\
+                str(self.autoguider) + ' ' + str(self.submit_mech) + ' ' + \
+                str(self.config_type) + ' ' + str(self.req_origin) + ' ' + \
+                str(report) + '\n'
         return output
