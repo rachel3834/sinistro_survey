@@ -32,7 +32,7 @@ class Instrument:
         
         network_overheads = { 
                     '1m0a':   {
-                            'sinistro': { 'front_padding': 90.0, 
+                            'sinistro': { 'front_padding': 240.0, 
                                           'filter_change': 2.0,
                                           'readout': 38.0
                                          },
